@@ -1,24 +1,47 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import { Stack, useRouter, useSegments } from 'expo-router'
+import { StatusBar } from 'expo-status-bar'
+import { useEffect } from 'react'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { supabase } from '../lib/supabase'
+import { useAuthStore } from '../store/authStore'
+import { useThemeStore } from '../store/ThemeStore'
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+export default function Layout() {
+  const theme = useThemeStore((state) => state.theme)
+  const { session, initialized, loadSession } = useAuthStore()
+  const router = useRouter()
+  const segments = useSegments()
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+  useEffect(() => {
+    loadSession()
+  }, [])
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, newSession) => {
+        useAuthStore.setState({ session: newSession })
+      }
+    )
+    return () => subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (!initialized) return
+    const inAuthGroup = segments[0] === '(auth)'
+    if (!session && !inAuthGroup) {
+      router.replace('/(auth)/register')
+    } else if (session && inAuthGroup) {
+      router.replace('/(tabs)/home')
+    }
+  }, [session, segments, initialized])
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
-  );
+    <SafeAreaProvider>
+      <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
+      <Stack screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: theme === 'dark' ? '#1A1025' : '#FDF6FF' }
+      }} />
+    </SafeAreaProvider>
+  )
 }
