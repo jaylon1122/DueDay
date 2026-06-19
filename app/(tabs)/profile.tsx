@@ -21,7 +21,7 @@ export default function Profile() {
   const clearSession = useAuthStore((state) => state.clearSession)
   const theme = useThemeStore((state) => state.theme)
   const toggleTheme = useThemeStore((state) => state.toggleTheme)
-
+  const [dailyCapacity, setDailyCapacity] = useState(5)
   const [fontsLoaded] = useFonts({
     Outfit_400Regular,
     Outfit_600SemiBold,
@@ -86,6 +86,7 @@ export default function Profile() {
         setPhone(data.phone ?? '')
         setLanguage(data.language ?? 'English')
         setNotificationsEnabled(data.notifications_enabled ?? true)
+        setDailyCapacity(data.daily_study_capacity ?? 5)
       }
     } catch (err: any) {
       console.warn("Profile fetch failed, using local profile state fallback:", err.message)
@@ -187,7 +188,17 @@ export default function Profile() {
       console.error("Failed to save notifications toggle online:", err)
     }
   }
-
+  const handleChangeCapacity = async (delta: number) => {
+    const next = Math.min(12, Math.max(1, dailyCapacity + delta))
+    setDailyCapacity(next)
+    try {
+      if (session?.user?.id) {
+        await upsertProfile(session.user.id, { daily_study_capacity: next })
+      }
+    } catch (err) {
+      console.error('Failed to save daily capacity:', err)
+    }
+  }
   const handleSendFeedback = async () => {
     if (!feedback.trim()) return Alert.alert('Error', 'Please enter your feedback')
     setFeedbackModal(false)
@@ -333,7 +344,40 @@ export default function Profile() {
           </TouchableOpacity>
         </View>
       </View>
-
+      {/* Study Capacity */}
+      <View style={[styles.card, { backgroundColor: cardBg }]}>
+        <Text style={[styles.sectionTitle, { color: textPrimary }]}>Study Settings</Text>
+        <View style={styles.themeRow}>
+          <View style={styles.themeLeft}>
+            <View style={[styles.themeIconBox, { backgroundColor: isDark ? 'rgba(192,132,245,0.15)' : '#F3E8FF' }]}>
+              <Ionicons name="time-outline" size={20} color="#C084F5" />
+            </View>
+            <View>
+              <Text style={[styles.themeLabel, { color: textPrimary }]}>Daily Study Capacity</Text>
+              <Text style={[styles.themeSubLabel, { color: textSecondary }]}>
+                Used by AI Plan to avoid overloading your day
+              </Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.capacityRow}>
+          <TouchableOpacity
+            style={styles.capacityBtn}
+            onPress={() => handleChangeCapacity(-0.5)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="remove" size={18} color="#C084F5" />
+          </TouchableOpacity>
+          <Text style={[styles.capacityValue, { color: textPrimary }]}>{dailyCapacity}h / day</Text>
+          <TouchableOpacity
+            style={styles.capacityBtn}
+            onPress={() => handleChangeCapacity(0.5)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="add" size={18} color="#C084F5" />
+          </TouchableOpacity>
+        </View>
+      </View>
       {/* Account Settings */}
       <View style={[styles.card, { backgroundColor: cardBg }]}>
         <Text style={[styles.sectionTitle, { color: textPrimary }]}>Account</Text>
@@ -589,7 +633,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15, shadowRadius: 4, elevation: 3,
   },
   toggleEmoji: { fontSize: 14 },
-
+  capacityRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 20, marginTop: 14,
+  },
+  capacityBtn: {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: '#F3E8FF', alignItems: 'center', justifyContent: 'center',
+  },
+  capacityValue: { fontFamily: 'Outfit_700Bold', fontSize: 18, minWidth: 80, textAlign: 'center' },
   settingRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 11 },
   settingIconBox: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   settingLabel: { flex: 1, fontFamily: 'Outfit_600SemiBold', fontSize: 14 },

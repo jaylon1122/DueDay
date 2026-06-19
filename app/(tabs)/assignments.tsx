@@ -7,36 +7,34 @@ import {
   TextInput, TouchableOpacity, View
 } from 'react-native'
 import AssignmentCard from '../../components/AssignmentCard'
+import { Priority, rankAssignments, Status } from '../../lib/aiScheduler'
 import { addAssignment, deleteAssignment, getAssignments, updateAssignment } from '../../lib/assignments'
 import { useAuthStore } from '../../store/authStore'
-
 const SUBJECTS = ['Math', 'Science', 'English', 'History', 'Filipino', 'PE', 'Arts', 'General']
 const PRIORITIES = ['low', 'medium', 'high']
 const STATUSES = ['pending', 'in_progress', 'done']
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const YEARS = [2025, 2026, 2027, 2028]
-
 const PRIORITY_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
-  low:    { color: '#16A34A', bg: '#DCFCE7', label: 'Low' },
+  low: { color: '#16A34A', bg: '#DCFCE7', label: 'Low' },
   medium: { color: '#D97706', bg: '#FEF3C7', label: 'Medium' },
-  high:   { color: '#DC2626', bg: '#FEE2E2', label: 'High' },
+  high: { color: '#DC2626', bg: '#FEE2E2', label: 'High' },
 }
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
-  pending:     { color: '#C084F5', bg: '#F3E8FF', label: 'Pending' },
+  pending: { color: '#C084F5', bg: '#F3E8FF', label: 'Pending' },
   in_progress: { color: '#3B82F6', bg: '#EFF6FF', label: 'In Progress' },
-  done:        { color: '#16A34A', bg: '#DCFCE7', label: 'Done' },
+  done: { color: '#16A34A', bg: '#DCFCE7', label: 'Done' },
 }
 
 const FILTER_TABS = ['All', 'Pending', 'In Progress', 'Done']
-
 type Assignment = {
   id: string
   title: string
   subject: string
   description?: string
-  priority: string
-  status: string
+  priority: Priority
+  status: Status
   due_date: string
   user_id: string
 }
@@ -49,6 +47,7 @@ export default function Assignments() {
   const [search, setSearch] = useState('')
   const [modalVisible, setModalVisible] = useState(false)
   const [editingItem, setEditingItem] = useState<Assignment | null>(null)
+  const [aiBanner, setAiBanner] = useState<{ rank: number; total: number; reason: string } | null>(null)
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -132,25 +131,52 @@ export default function Assignments() {
       user_id: session.user.id,
     }
 
-    console.log('Saving payload:', JSON.stringify(payload))
-
     try {
       if (editingItem) {
         const { error } = await updateAssignment(editingItem.id, payload)
         if (error) { Alert.alert('Update Error', error.message); return }
+        setModalVisible(false)
+        resetForm()
+        await load()
       } else {
-        const { error } = await addAssignment(payload)
+        const { data: inserted, error } = await addAssignment(payload)
         if (error) { Alert.alert('Insert Error', error.message); return }
+
+        setModalVisible(false)
+        resetForm()
+        await load()
+
+        // Show AI banner for where this new assignment ranks
+        const insertedRow = inserted as any
+        if (insertedRow?.id) {
+          showAIBannerFor(insertedRow.id)
+        }
       }
-      console.log('Save successful!')
-      setModalVisible(false)
-      resetForm()
-      await load()
     } catch (err: any) {
       Alert.alert('Error', err.message)
     }
   }
+  const showAIBannerFor = async (assignmentId: string) => {
+    if (!session?.user?.id) return
+    try {
+      const { data: allAssignments } = await getAssignments(session.user.id)
+      if (!allAssignments) return
 
+      const ranked = rankAssignments(allAssignments as Assignment[])
+      const index = ranked.findIndex(a => a.id === assignmentId)
+      if (index === -1) return // e.g. already done somehow
+
+      setAiBanner({
+        rank: index + 1,
+        total: ranked.length,
+        reason: ranked[index].reason,
+      })
+
+      setTimeout(() => setAiBanner(null), 6000)
+    } catch (err) {
+      console.warn('AI banner failed:', err)
+    }
+  }
   const handleDelete = async (id: string) => {
     const { error } = await deleteAssignment(id)
     if (error) { Alert.alert('Delete Error', error.message); return }
@@ -221,7 +247,20 @@ export default function Assignments() {
           <Ionicons name="add" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
-
+      {aiBanner && (
+        <View style={styles.aiBanner}>
+          <Ionicons name="sparkles" size={16} color="#fff" />
+          <View style={styles.aiBannerTextWrap}>
+            <Text style={styles.aiBannerTitle}>
+              AI Plan: #{aiBanner.rank} of {aiBanner.total} priorities
+            </Text>
+            <Text style={styles.aiBannerSubtitle}>{aiBanner.reason}</Text>
+          </View>
+          <TouchableOpacity onPress={() => setAiBanner(null)}>
+            <Ionicons name="close" size={16} color="rgba(255,255,255,0.8)" />
+          </TouchableOpacity>
+        </View>
+      )}
       {/* Search */}
       <View style={styles.searchBox}>
         <Ionicons name="search-outline" size={16} color="#9A85A4" />
@@ -250,9 +289,9 @@ export default function Assignments() {
           {FILTER_TABS.map(tab => {
             const count =
               tab === 'All' ? counts.all :
-              tab === 'Pending' ? counts.pending :
-              tab === 'In Progress' ? counts.in_progress :
-              counts.done
+                tab === 'Pending' ? counts.pending :
+                  tab === 'In Progress' ? counts.in_progress :
+                    counts.done
             const active = filter === tab
             return (
               <TouchableOpacity
@@ -389,7 +428,7 @@ export default function Assignments() {
               <View style={styles.dateRow}>
                 <View style={styles.dateCol}>
                   <Text style={styles.dateColLabel}>Month</Text>
-                  <ScrollView style={styles.datePicker} showsVerticalScrollIndicator={false}>
+                  <ScrollView style={styles.datePicker} showsVerticalScrollIndicator={false} nestedScrollEnabled={true}>
                     {MONTHS.map((m, i) => (
                       <TouchableOpacity
                         key={m}
@@ -406,7 +445,7 @@ export default function Assignments() {
 
                 <View style={styles.dateCol}>
                   <Text style={styles.dateColLabel}>Day</Text>
-                  <ScrollView style={styles.datePicker} showsVerticalScrollIndicator={false}>
+                  <ScrollView style={styles.datePicker} showsVerticalScrollIndicator={false} nestedScrollEnabled={true}>
                     {getDaysInMonth(dueDate.getFullYear(), dueDate.getMonth()).map(d => (
                       <TouchableOpacity
                         key={d}
@@ -423,7 +462,7 @@ export default function Assignments() {
 
                 <View style={styles.dateCol}>
                   <Text style={styles.dateColLabel}>Year</Text>
-                  <ScrollView style={styles.datePicker} showsVerticalScrollIndicator={false}>
+                  <ScrollView style={styles.datePicker} showsVerticalScrollIndicator={false} nestedScrollEnabled={true}>
                     {YEARS.map(y => (
                       <TouchableOpacity
                         key={y}
@@ -479,7 +518,16 @@ const styles = StyleSheet.create({
     shadowColor: '#C084F5', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35, shadowRadius: 10, elevation: 5,
   },
-
+  aiBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#C084F5', borderRadius: 16,
+    marginHorizontal: 20, marginBottom: 12, padding: 14,
+    shadowColor: '#C084F5', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
+  },
+  aiBannerTextWrap: { flex: 1 },
+  aiBannerTitle: { fontFamily: 'Outfit_700Bold', fontSize: 13, color: '#fff' },
+  aiBannerSubtitle: { fontFamily: 'Outfit_400Regular', fontSize: 12, color: 'rgba(255,255,255,0.9)', marginTop: 2 },
   searchBox: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: 'rgba(255,255,255,0.9)',
