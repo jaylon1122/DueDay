@@ -7,7 +7,7 @@ import {
   TextInput, TouchableOpacity, View
 } from 'react-native'
 import AssignmentCard from '../../components/AssignmentCard'
-import { Priority, rankAssignments, Status } from '../../lib/aiScheduler'
+import { estimateHours, Priority, rankAssignments, Status } from '../../lib/aiScheduler'
 import { addAssignment, deleteAssignment, getAssignments, updateAssignment } from '../../lib/assignments'
 import { useAuthStore } from '../../store/authStore'
 const SUBJECTS = ['Math', 'Science', 'English', 'History', 'Filipino', 'PE', 'Arts', 'General']
@@ -37,6 +37,7 @@ type Assignment = {
   status: Status
   due_date: string
   user_id: string
+  estimated_hours?: number | null
 }
 
 export default function Assignments() {
@@ -55,6 +56,10 @@ export default function Assignments() {
   const [priority, setPriority] = useState('medium')
   const [status, setStatus] = useState('pending')
   const [dueDate, setDueDate] = useState(new Date())
+  // Blank = "let the AI keep auto-estimating". A filled value is a user override,
+  // persisted to assignments.estimated_hours and preferred over the auto-estimate
+  // everywhere aiScheduler reads `a.estimated_hours ?? estimateHours(...)`.
+  const [estimatedHours, setEstimatedHours] = useState('')
 
   const [fontsLoaded] = useFonts({
     Outfit_400Regular,
@@ -62,6 +67,10 @@ export default function Assignments() {
     Outfit_700Bold,
     Outfit_900Black,
   })
+
+  // Live suggestion based on the currently selected priority + subject.
+  // Recalculates as the user changes either chip, even before saving.
+  const suggestedHours = estimateHours(priority as Priority, subject)
 
   const load = async () => {
     if (!session) {
@@ -96,6 +105,7 @@ export default function Assignments() {
     setPriority('medium')
     setStatus('pending')
     setDueDate(new Date())
+    setEstimatedHours('')
     setEditingItem(null)
   }
 
@@ -112,12 +122,29 @@ export default function Assignments() {
     setPriority(item.priority)
     setStatus(item.status)
     setDueDate(new Date(item.due_date))
+    setEstimatedHours(
+      item.estimated_hours != null ? String(item.estimated_hours) : ''
+    )
     setModalVisible(true)
   }
 
   const handleSave = async () => {
     if (!title.trim()) return Alert.alert('Error', 'Title is required')
     if (!session?.user?.id) return Alert.alert('Error', 'Not logged in')
+
+    // Validate the hours override: blank is fine (falls back to auto-estimate),
+    // but a non-numeric or out-of-range value should be caught here, not in Supabase.
+    let parsedHours: number | null = null
+    if (estimatedHours.trim() !== '') {
+      const n = parseFloat(estimatedHours)
+      if (isNaN(n) || n <= 0) {
+        return Alert.alert('Error', 'Estimated hours must be a positive number')
+      }
+      if (n > 40) {
+        return Alert.alert('Error', 'That seems too high for one assignment — double check it')
+      }
+      parsedHours = n
+    }
 
     const targetDate = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate(), 12, 0, 0)
 
@@ -129,6 +156,7 @@ export default function Assignments() {
       status,
       due_date: targetDate.toISOString(),
       user_id: session.user.id,
+      estimated_hours: parsedHours,
     }
 
     try {
@@ -417,7 +445,30 @@ export default function Assignments() {
                 })}
               </View>
 
-              <Text style={styles.fieldLabel}>Due Date</Text>
+              <Text style={styles.fieldLabel}>Estimated Hours</Text>
+              <View style={styles.hoursRow}>
+                <TextInput
+                  placeholder={`${suggestedHours}`}
+                  placeholderTextColor="#C4B5C8"
+                  style={styles.hoursInput}
+                  value={estimatedHours}
+                  onChangeText={(t) => setEstimatedHours(t.replace(/[^0-9.]/g, ''))}
+                  keyboardType="decimal-pad"
+                />
+                <Text style={styles.hoursUnit}>h</Text>
+                <TouchableOpacity
+                  style={styles.suggestBtn}
+                  onPress={() => setEstimatedHours(String(suggestedHours))}
+                >
+                  <Ionicons name="sparkles" size={12} color="#C084F5" />
+                  <Text style={styles.suggestBtnText}>Use {suggestedHours}h</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.hoursHint}>
+                Leave blank to let the AI auto-estimate based on priority and subject.
+              </Text>
+
+              <Text style={[styles.fieldLabel, { marginTop: 4 }]}>Due Date</Text>
               <View style={styles.datePreview}>
                 <Ionicons name="calendar-outline" size={15} color="#C084F5" />
                 <Text style={styles.datePreviewText}>
@@ -602,6 +653,25 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: '#C084F5', borderColor: '#C084F5' },
   chipText: { fontFamily: 'Outfit_600SemiBold', fontSize: 13, color: '#9A85A4' },
   chipTextActive: { color: '#fff' },
+
+  hoursRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6,
+  },
+  hoursInput: {
+    fontFamily: 'Outfit_400Regular',
+    backgroundColor: '#F9F0FF', borderWidth: 1.5, borderColor: '#E8D5F5',
+    borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14,
+    fontSize: 15, color: '#3D2C4E', width: 90,
+  },
+  hoursUnit: { fontFamily: 'Outfit_600SemiBold', fontSize: 14, color: '#9A85A4' },
+  suggestBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 12, paddingVertical: 9,
+    borderRadius: 14, backgroundColor: '#F3E8FF',
+    borderWidth: 1.5, borderColor: '#E8D5F5',
+  },
+  suggestBtnText: { fontFamily: 'Outfit_600SemiBold', fontSize: 12, color: '#C084F5' },
+  hoursHint: { fontFamily: 'Outfit_400Regular', fontSize: 11, color: '#9A85A4', marginBottom: 16, marginLeft: 2 },
 
   datePreview: {
     flexDirection: 'row', alignItems: 'center', gap: 8,

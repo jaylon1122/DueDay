@@ -64,8 +64,24 @@ function daysBetween(from: Date, to: Date): number {
 const PRIORITY_WEIGHT: Record<Priority, number> = { low: 5, medium: 10, high: 15 }
 const DEFAULT_HOURS: Record<Priority, number> = { low: 1.5, medium: 3, high: 5 }
 
-export function estimateHours(priority: Priority): number {
-  return DEFAULT_HOURS[priority]
+// Subject nudges the priority-based base estimate up or down.
+// Priority still dominates; this is a multiplier, not a second flat table.
+const SUBJECT_MULTIPLIER: Record<string, number> = {
+  math: 1.2,
+  science: 1.2,
+  english: 1.0,
+  history: 1.0,
+  filipino: 1.0,
+  pe: 0.6,
+  arts: 0.7,
+  general: 1.0,
+}
+
+export function estimateHours(priority: Priority, subject?: string): number {
+  const base = DEFAULT_HOURS[priority]
+  const mult = subject ? (SUBJECT_MULTIPLIER[subject.toLowerCase()] ?? 1.0) : 1.0
+  // round to nearest 0.5h so the UI never shows ugly decimals
+  return Math.round(base * mult * 2) / 2
 }
 
 // ---- Urgency scoring ----
@@ -77,7 +93,7 @@ export function calculateUrgencyScore(a: Assignment, today: Date = new Date()) {
   const isOverdue = daysUntilDue < 0
 
   const priorityScore = PRIORITY_WEIGHT[a.priority]
-  const effectiveHours = a.estimated_hours ?? estimateHours(a.priority)
+  const effectiveHours = a.estimated_hours ?? estimateHours(a.priority, a.subject)
 
   const deadlineScore = isOverdue ? 50 : Math.max(0, 14 - daysUntilDue) * 2
   const overdueBonus = isOverdue ? 100 : 0
@@ -125,15 +141,6 @@ export function getWorkloadTier(hours: number, dailyCapacity: number): WorkloadT
 }
 
 // ---- Daily study plan (greedy allocation across days leading up to due date) ----
-  const addToDay = (plan: DayPlan, assignmentId: string, title: string, hours: number) => {
-    const existing = plan.items.find(i => i.assignmentId === assignmentId)
-    if (existing) {
-      existing.hours += hours
-    } else {
-      plan.items.push({ assignmentId, title, hours })
-    }
-    plan.totalHours += hours
-  }
 
 export function generateDailyPlan(
   ranked: RankedAssignment[],
@@ -144,6 +151,16 @@ export function generateDailyPlan(
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate())
   const urgencyIndex = new Map<string, number>()
   ranked.forEach((a, i) => urgencyIndex.set(a.id, i))
+
+  const addToDay = (plan: DayPlan, assignmentId: string, title: string, hours: number) => {
+    const existing = plan.items.find(i => i.assignmentId === assignmentId)
+    if (existing) {
+      existing.hours += hours
+    } else {
+      plan.items.push({ assignmentId, title, hours })
+    }
+    plan.totalHours += hours
+  }
 
   const getDay = (d: Date): DayPlan => {
     const key = toKey(d)
@@ -179,7 +196,7 @@ export function generateDailyPlan(
     }
 
     if (remainingHours > 0) {
-      const plan = getDay(due)
+      const plan = getDay(a.isOverdue ? todayMidnight : due)
       addToDay(plan, a.id, a.title, remainingHours)
     }
   }

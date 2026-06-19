@@ -211,9 +211,14 @@ export default function Profile() {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Sign Out', style: 'destructive',
-        onPress: async () => {
-          clearSession()
-          await supabase.auth.signOut()
+        onPress: () => {
+          // Fire and forget the server logout. If the network hangs, we don't care.
+          supabase.auth.signOut().catch(() => {})
+
+          // Wait for the Alert modal to fully close before triggering router navigation
+          setTimeout(() => {
+            clearSession()
+          }, 300)
         },
       },
     ])
