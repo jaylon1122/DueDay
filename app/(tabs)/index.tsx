@@ -5,7 +5,7 @@ export default function Index() {
   const theme = useThemeStore((state) => state.theme)
 
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme === 'dark' ? '#000' : '#FDF6FF' }}>
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme === 'dark' ? '#1A1025' : '#FDF6FF' }}>
       <ActivityIndicator size="large" color="#C084F5" />
     </View>
   )

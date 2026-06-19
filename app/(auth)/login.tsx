@@ -40,15 +40,69 @@ export default function LoginScreen() {
     }
   }
 
-  const handleOAuth = async (provider: 'facebook' | 'apple') => {
+  const handleGoogleLogin = async () => {
     setLoading(true)
     try {
       const { data, error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: { redirectTo: 'exp://', skipBrowserRedirect: true },
+        provider: 'google',
+        options: {
+          redirectTo: 'stickersmash://auth/callback',
+          skipBrowserRedirect: true,
+        },
       })
       if (error) { Alert.alert('Error', error.message); return }
-      if (data.url) await WebBrowser.openAuthSessionAsync(data.url, 'exp://')
+      if (data.url) {
+        const result = await WebBrowser.openAuthSessionAsync(
+          data.url,
+          'stickersmash://auth/callback'
+        )
+        if (result.type === 'success' && result.url) {
+          const url = new URL(result.url)
+          const accessToken = url.searchParams.get('access_token')
+          const refreshToken = url.searchParams.get('refresh_token')
+          if (accessToken && refreshToken) {
+            await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            })
+          }
+        }
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleFacebookLogin = async () => {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'facebook',
+        options: {
+          redirectTo: 'stickersmash://auth/callback',
+          skipBrowserRedirect: true,
+        },
+      })
+      if (error) { Alert.alert('Error', error.message); return }
+      if (data.url) {
+        const result = await WebBrowser.openAuthSessionAsync(
+          data.url,
+          'stickersmash://auth/callback'
+        )
+        if (result.type === 'success' && result.url) {
+          const url = new URL(result.url)
+          const accessToken = url.searchParams.get('access_token')
+          const refreshToken = url.searchParams.get('refresh_token')
+          if (accessToken && refreshToken) {
+            await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            })
+          }
+        }
+      }
     } catch (err: any) {
       Alert.alert('Error', err.message)
     } finally {
@@ -79,7 +133,7 @@ export default function LoginScreen() {
 
         <View style={styles.card}>
           <Image
-            source={require('../../assets/image/logo.jpg')}
+            source={require('../../assets/images/logo.jpg')}
             style={styles.logo}
             resizeMode="contain"
           />
@@ -137,13 +191,25 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.socialRow}>
-            <TouchableOpacity style={styles.socialButton} onPress={() => handleOAuth('facebook')} disabled={loading}>
+            <TouchableOpacity
+              style={styles.socialButton}
+              onPress={handleFacebookLogin}
+              disabled={loading}
+            >
               <Ionicons name="logo-facebook" size={20} color="#1877F2" />
               <Text style={styles.socialText}>Facebook</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.socialButton} onPress={() => handleOAuth('apple')} disabled={loading}>
-              <Ionicons name="logo-apple" size={20} color="#000" />
-              <Text style={styles.socialText}>Apple</Text>
+
+            <TouchableOpacity
+              style={styles.socialButton}
+              onPress={handleGoogleLogin}
+              disabled={loading}
+            >
+              <Image
+                source={{ uri: 'https://www.google.com/favicon.ico' }}
+                style={styles.googleIcon}
+              />
+              <Text style={styles.socialText}>Google</Text>
             </TouchableOpacity>
           </View>
 
@@ -224,6 +290,7 @@ const styles = StyleSheet.create({
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     borderWidth: 1.5, borderColor: '#E8D5F5', borderRadius: 16, padding: 13, backgroundColor: '#FDFAFF',
   },
+  googleIcon: { width: 20, height: 20 },
   socialText: { fontFamily: 'Outfit_600SemiBold', fontSize: 14, color: '#3D2C4E' },
 
   bottomLink: { marginTop: 22, alignItems: 'center' },
