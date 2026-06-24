@@ -2,6 +2,8 @@ import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect } from 'react'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { getAssignments } from '../lib/assignments'
+import { checkAndNotifyDueToday, registerForPushNotificationsAsync } from '../lib/notifications'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import { useThemeStore } from '../store/ThemeStore'
@@ -14,6 +16,10 @@ export default function Layout() {
 
   useEffect(() => {
     loadSession()
+  }, [])
+
+  useEffect(() => {
+    registerForPushNotificationsAsync()
   }, [])
 
   useEffect(() => {
@@ -48,19 +54,30 @@ export default function Layout() {
             const updates: any = {}
             if (fullName && existingProfile.full_name !== fullName) updates.full_name = fullName
             if (avatarUrl && existingProfile.avatar_url !== avatarUrl) updates.avatar_url = avatarUrl
-            
+
             if (Object.keys(updates).length > 0) {
               await supabase.from('profiles').update(updates).eq('id', newSession.user.id)
             }
           }
         }
-        
+
         // Update the app state ONLY AFTER the database profile has been updated
         useAuthStore.setState({ session: newSession })
       }
     )
     return () => subscription.unsubscribe()
   }, [])
+
+  useEffect(() => {
+    if (!session?.user?.id) return
+
+    const checkDueToday = async () => {
+      const { data } = await getAssignments(session.user.id)
+      if (data) await checkAndNotifyDueToday(data)
+    }
+
+    checkDueToday()
+  }, [session?.user?.id])
 
   useEffect(() => {
     if (!initialized) return

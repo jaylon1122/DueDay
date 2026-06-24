@@ -10,6 +10,8 @@ import AssignmentCard from '../../components/AssignmentCard'
 import { estimateHours, Priority, rankAssignments, Status } from '../../lib/aiScheduler'
 import { addAssignment, deleteAssignment, getAssignments, updateAssignment } from '../../lib/assignments'
 import { useAuthStore } from '../../store/authStore'
+import { useThemeStore } from '../../store/ThemeStore'
+
 const SUBJECTS = ['Math', 'Science', 'English', 'History', 'Filipino', 'PE', 'Arts', 'General']
 const PRIORITIES = ['low', 'medium', 'high']
 const STATUSES = ['pending', 'in_progress', 'done']
@@ -42,6 +44,18 @@ type Assignment = {
 
 export default function Assignments() {
   const session = useAuthStore((state) => state.session)
+  const theme = useThemeStore((state) => state.theme)
+  const isDark = theme === 'dark'
+
+  const bg = isDark ? '#1A1025' : '#FDF6FF'
+  const cardBg = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.9)'
+  const textPrimary = isDark ? '#F3E8FF' : '#3D2C4E'
+  const textSecondary = isDark ? '#A78BBA' : '#9A85A4'
+  const inputBg = isDark ? 'rgba(255,255,255,0.08)' : '#F9F0FF'
+  const inputBorder = isDark ? 'rgba(255,255,255,0.15)' : '#E8D5F5'
+  const modalBg = isDark ? '#1A1025' : '#FDF6FF'
+  const placeholderColor = isDark ? '#6B5B7A' : '#C4B5C8'
+
   const [items, setItems] = useState<Assignment[]>([])
   const [loading, setLoading] = useState(false)
   const [filter, setFilter] = useState('All')
@@ -56,9 +70,6 @@ export default function Assignments() {
   const [priority, setPriority] = useState('medium')
   const [status, setStatus] = useState('pending')
   const [dueDate, setDueDate] = useState(new Date())
-  // Blank = "let the AI keep auto-estimating". A filled value is a user override,
-  // persisted to assignments.estimated_hours and preferred over the auto-estimate
-  // everywhere aiScheduler reads `a.estimated_hours ?? estimateHours(...)`.
   const [estimatedHours, setEstimatedHours] = useState('')
 
   const [fontsLoaded] = useFonts({
@@ -68,8 +79,6 @@ export default function Assignments() {
     Outfit_900Black,
   })
 
-  // Live suggestion based on the currently selected priority + subject.
-  // Recalculates as the user changes either chip, even before saving.
   const suggestedHours = estimateHours(priority as Priority, subject)
 
   const load = async () => {
@@ -132,8 +141,6 @@ export default function Assignments() {
     if (!title.trim()) return Alert.alert('Error', 'Title is required')
     if (!session?.user?.id) return Alert.alert('Error', 'Not logged in')
 
-    // Validate the hours override: blank is fine (falls back to auto-estimate),
-    // but a non-numeric or out-of-range value should be caught here, not in Supabase.
     let parsedHours: number | null = null
     if (estimatedHours.trim() !== '') {
       const n = parseFloat(estimatedHours)
@@ -174,7 +181,6 @@ export default function Assignments() {
         resetForm()
         await load()
 
-        // Show AI banner for where this new assignment ranks
         const insertedRow = inserted as any
         if (insertedRow?.id) {
           showAIBannerFor(insertedRow.id)
@@ -192,7 +198,7 @@ export default function Assignments() {
 
       const ranked = rankAssignments(allAssignments as Assignment[])
       const index = ranked.findIndex(a => a.id === assignmentId)
-      if (index === -1) return // e.g. already done somehow
+      if (index === -1) return
 
       setAiBanner({
         rank: index + 1,
@@ -261,15 +267,15 @@ export default function Assignments() {
   if (!fontsLoaded) return null
 
   return (
-    <View style={styles.flex}>
+    <View style={[styles.flex, { backgroundColor: bg }]}>
 
-      <View style={[styles.blob, styles.blobTop]} />
+      <View style={[styles.blob, styles.blobTop, isDark && { backgroundColor: '#4A1D6E', opacity: 0.25 }]} />
 
       {/* Header */}
       <View style={styles.header}>
         <View>
           <Text style={styles.appName}>DueDay</Text>
-          <Text style={styles.pageTitle}>Assignments</Text>
+          <Text style={[styles.pageTitle, { color: textPrimary }]}>Assignments</Text>
         </View>
         <TouchableOpacity style={styles.addBtn} onPress={openAdd}>
           <Ionicons name="add" size={24} color="#fff" />
@@ -290,18 +296,18 @@ export default function Assignments() {
         </View>
       )}
       {/* Search */}
-      <View style={styles.searchBox}>
-        <Ionicons name="search-outline" size={16} color="#9A85A4" />
+      <View style={[styles.searchBox, { backgroundColor: cardBg, borderColor: inputBorder }]}>
+        <Ionicons name="search-outline" size={16} color={textSecondary} />
         <TextInput
           placeholder="Search assignments..."
-          placeholderTextColor="#C4B5C8"
-          style={styles.searchInput}
+          placeholderTextColor={placeholderColor}
+          style={[styles.searchInput, { color: textPrimary }]}
           value={search}
           onChangeText={setSearch}
         />
         {search ? (
           <TouchableOpacity onPress={() => setSearch('')}>
-            <Ionicons name="close-circle" size={16} color="#9A85A4" />
+            <Ionicons name="close-circle" size={16} color={textSecondary} />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -324,11 +330,15 @@ export default function Assignments() {
             return (
               <TouchableOpacity
                 key={tab}
-                style={[styles.filterTab, active && styles.filterTabActive]}
+                style={[
+                  styles.filterTab,
+                  { backgroundColor: cardBg, borderColor: inputBorder },
+                  active && styles.filterTabActive
+                ]}
                 onPress={() => setFilter(tab)}
               >
-                <Text style={[styles.filterTabText, active && styles.filterTabTextActive]}>{tab}</Text>
-                <View style={[styles.filterCount, active && styles.filterCountActive]}>
+                <Text style={[styles.filterTabText, { color: textSecondary }, active && styles.filterTabTextActive]}>{tab}</Text>
+                <View style={[styles.filterCount, { backgroundColor: isDark ? 'rgba(192,132,245,0.2)' : '#F3E8FF' }, active && styles.filterCountActive]}>
                   <Text style={[styles.filterCountText, active && styles.filterCountTextActive]}>{count}</Text>
                 </View>
               </TouchableOpacity>
@@ -348,8 +358,8 @@ export default function Assignments() {
         ListEmptyComponent={
           <View style={styles.emptyBox}>
             <Text style={styles.emptyEmoji}>📭</Text>
-            <Text style={styles.emptyText}>No assignments found</Text>
-            <Text style={styles.emptySubtext}>Tap + to add your first one</Text>
+            <Text style={[styles.emptyText, { color: textPrimary }]}>No assignments found</Text>
+            <Text style={[styles.emptySubtext, { color: textSecondary }]}>Tap + to add your first one</Text>
           </View>
         }
         renderItem={({ item }) => (
@@ -368,50 +378,50 @@ export default function Assignments() {
           style={styles.modalOverlay}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
+          <View style={[styles.modalSheet, { backgroundColor: modalBg }]}>
+            <View style={[styles.modalHandle, { backgroundColor: inputBorder }]} />
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.modalTitle}>
+              <Text style={[styles.modalTitle, { color: textPrimary }]}>
                 {editingItem ? '✏️ Edit Assignment' : '➕ New Assignment'}
               </Text>
 
-              <Text style={styles.fieldLabel}>Title *</Text>
+              <Text style={[styles.fieldLabel, { color: '#9A7BC4' }]}>Title *</Text>
               <TextInput
                 placeholder="e.g. Problem Set 4"
-                placeholderTextColor="#C4B5C8"
-                style={styles.input}
+                placeholderTextColor={placeholderColor}
+                style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textPrimary }]}
                 value={title}
                 onChangeText={setTitle}
               />
 
-              <Text style={styles.fieldLabel}>Description</Text>
+              <Text style={[styles.fieldLabel, { color: '#9A7BC4' }]}>Description</Text>
               <TextInput
                 placeholder="Optional notes..."
-                placeholderTextColor="#C4B5C8"
-                style={[styles.input, styles.inputMulti]}
+                placeholderTextColor={placeholderColor}
+                style={[styles.input, styles.inputMulti, { backgroundColor: inputBg, borderColor: inputBorder, color: textPrimary }]}
                 value={description}
                 onChangeText={setDescription}
                 multiline
                 numberOfLines={3}
               />
 
-              <Text style={styles.fieldLabel}>Subject</Text>
+              <Text style={[styles.fieldLabel, { color: '#9A7BC4' }]}>Subject</Text>
               <View style={styles.chipScrollContainer}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
                   {SUBJECTS.map(s => (
                     <TouchableOpacity
                       key={s}
-                      style={[styles.chip, subject === s && styles.chipActive]}
+                      style={[styles.chip, { backgroundColor: inputBg, borderColor: inputBorder }, subject === s && styles.chipActive]}
                       onPress={() => setSubject(s)}
                     >
-                      <Text style={[styles.chipText, subject === s && styles.chipTextActive]}>{s}</Text>
+                      <Text style={[styles.chipText, { color: textSecondary }, subject === s && styles.chipTextActive]}>{s}</Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
               </View>
 
-              <Text style={styles.fieldLabel}>Priority</Text>
+              <Text style={[styles.fieldLabel, { color: '#9A7BC4' }]}>Priority</Text>
               <View style={styles.chipRow}>
                 {PRIORITIES.map(p => {
                   const cfg = PRIORITY_CONFIG[p]
@@ -419,16 +429,16 @@ export default function Assignments() {
                   return (
                     <TouchableOpacity
                       key={p}
-                      style={[styles.chip, active && { backgroundColor: cfg.color, borderColor: cfg.color }]}
+                      style={[styles.chip, { backgroundColor: inputBg, borderColor: inputBorder }, active && { backgroundColor: cfg.color, borderColor: cfg.color }]}
                       onPress={() => setPriority(p)}
                     >
-                      <Text style={[styles.chipText, active && { color: '#fff' }]}>{cfg.label}</Text>
+                      <Text style={[styles.chipText, { color: textSecondary }, active && { color: '#fff' }]}>{cfg.label}</Text>
                     </TouchableOpacity>
                   )
                 })}
               </View>
 
-              <Text style={styles.fieldLabel}>Status</Text>
+              <Text style={[styles.fieldLabel, { color: '#9A7BC4' }]}>Status</Text>
               <View style={styles.chipRow}>
                 {STATUSES.map(s => {
                   const cfg = STATUS_CONFIG[s]
@@ -436,57 +446,57 @@ export default function Assignments() {
                   return (
                     <TouchableOpacity
                       key={s}
-                      style={[styles.chip, active && { backgroundColor: cfg.color, borderColor: cfg.color }]}
+                      style={[styles.chip, { backgroundColor: inputBg, borderColor: inputBorder }, active && { backgroundColor: cfg.color, borderColor: cfg.color }]}
                       onPress={() => setStatus(s)}
                     >
-                      <Text style={[styles.chipText, active && { color: '#fff' }]}>{cfg.label}</Text>
+                      <Text style={[styles.chipText, { color: textSecondary }, active && { color: '#fff' }]}>{cfg.label}</Text>
                     </TouchableOpacity>
                   )
                 })}
               </View>
 
-              <Text style={styles.fieldLabel}>Estimated Hours</Text>
+              <Text style={[styles.fieldLabel, { color: '#9A7BC4' }]}>Estimated Hours</Text>
               <View style={styles.hoursRow}>
                 <TextInput
                   placeholder={`${suggestedHours}`}
-                  placeholderTextColor="#C4B5C8"
-                  style={styles.hoursInput}
+                  placeholderTextColor={placeholderColor}
+                  style={[styles.hoursInput, { backgroundColor: inputBg, borderColor: inputBorder, color: textPrimary }]}
                   value={estimatedHours}
                   onChangeText={(t) => setEstimatedHours(t.replace(/[^0-9.]/g, ''))}
                   keyboardType="decimal-pad"
                 />
-                <Text style={styles.hoursUnit}>h</Text>
+                <Text style={[styles.hoursUnit, { color: textSecondary }]}>h</Text>
                 <TouchableOpacity
-                  style={styles.suggestBtn}
+                  style={[styles.suggestBtn, { backgroundColor: isDark ? 'rgba(192,132,245,0.15)' : '#F3E8FF', borderColor: inputBorder }]}
                   onPress={() => setEstimatedHours(String(suggestedHours))}
                 >
                   <Ionicons name="sparkles" size={12} color="#C084F5" />
                   <Text style={styles.suggestBtnText}>Use {suggestedHours}h</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={styles.hoursHint}>
+              <Text style={[styles.hoursHint, { color: textSecondary }]}>
                 Leave blank to let the AI auto-estimate based on priority and subject.
               </Text>
 
-              <Text style={[styles.fieldLabel, { marginTop: 4 }]}>Due Date</Text>
-              <View style={styles.datePreview}>
+              <Text style={[styles.fieldLabel, { color: '#9A7BC4', marginTop: 4 }]}>Due Date</Text>
+              <View style={[styles.datePreview, { backgroundColor: inputBg, borderColor: inputBorder }]}>
                 <Ionicons name="calendar-outline" size={15} color="#C084F5" />
-                <Text style={styles.datePreviewText}>
+                <Text style={[styles.datePreviewText, { color: textPrimary }]}>
                   {dueDate.toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })}
                 </Text>
               </View>
 
               <View style={styles.dateRow}>
                 <View style={styles.dateCol}>
-                  <Text style={styles.dateColLabel}>Month</Text>
-                  <ScrollView style={styles.datePicker} showsVerticalScrollIndicator={false} nestedScrollEnabled={true}>
+                  <Text style={[styles.dateColLabel, { color: textSecondary }]}>Month</Text>
+                  <ScrollView style={[styles.datePicker, { backgroundColor: inputBg, borderColor: inputBorder }]} showsVerticalScrollIndicator={false} nestedScrollEnabled={true}>
                     {MONTHS.map((m, i) => (
                       <TouchableOpacity
                         key={m}
                         style={[styles.dateOption, dueDate.getMonth() === i && styles.dateOptionActive]}
                         onPress={() => setMonth(i)}
                       >
-                        <Text style={[styles.dateOptionText, dueDate.getMonth() === i && styles.dateOptionTextActive]}>
+                        <Text style={[styles.dateOptionText, { color: textSecondary }, dueDate.getMonth() === i && styles.dateOptionTextActive]}>
                           {m}
                         </Text>
                       </TouchableOpacity>
@@ -495,15 +505,15 @@ export default function Assignments() {
                 </View>
 
                 <View style={styles.dateCol}>
-                  <Text style={styles.dateColLabel}>Day</Text>
-                  <ScrollView style={styles.datePicker} showsVerticalScrollIndicator={false} nestedScrollEnabled={true}>
+                  <Text style={[styles.dateColLabel, { color: textSecondary }]}>Day</Text>
+                  <ScrollView style={[styles.datePicker, { backgroundColor: inputBg, borderColor: inputBorder }]} showsVerticalScrollIndicator={false} nestedScrollEnabled={true}>
                     {getDaysInMonth(dueDate.getFullYear(), dueDate.getMonth()).map(d => (
                       <TouchableOpacity
                         key={d}
                         style={[styles.dateOption, dueDate.getDate() === d && styles.dateOptionActive]}
                         onPress={() => setDay(d)}
                       >
-                        <Text style={[styles.dateOptionText, dueDate.getDate() === d && styles.dateOptionTextActive]}>
+                        <Text style={[styles.dateOptionText, { color: textSecondary }, dueDate.getDate() === d && styles.dateOptionTextActive]}>
                           {d}
                         </Text>
                       </TouchableOpacity>
@@ -512,15 +522,15 @@ export default function Assignments() {
                 </View>
 
                 <View style={styles.dateCol}>
-                  <Text style={styles.dateColLabel}>Year</Text>
-                  <ScrollView style={styles.datePicker} showsVerticalScrollIndicator={false} nestedScrollEnabled={true}>
+                  <Text style={[styles.dateColLabel, { color: textSecondary }]}>Year</Text>
+                  <ScrollView style={[styles.datePicker, { backgroundColor: inputBg, borderColor: inputBorder }]} showsVerticalScrollIndicator={false} nestedScrollEnabled={true}>
                     {YEARS.map(y => (
                       <TouchableOpacity
                         key={y}
                         style={[styles.dateOption, dueDate.getFullYear() === y && styles.dateOptionActive]}
                         onPress={() => setYear(y)}
                       >
-                        <Text style={[styles.dateOptionText, dueDate.getFullYear() === y && styles.dateOptionTextActive]}>
+                        <Text style={[styles.dateOptionText, { color: textSecondary }, dueDate.getFullYear() === y && styles.dateOptionTextActive]}>
                           {y}
                         </Text>
                       </TouchableOpacity>
@@ -531,10 +541,10 @@ export default function Assignments() {
 
               <View style={styles.modalBtns}>
                 <TouchableOpacity
-                  style={styles.cancelBtn}
+                  style={[styles.cancelBtn, { backgroundColor: isDark ? 'rgba(192,132,245,0.15)' : '#F3E8FF' }]}
                   onPress={() => { setModalVisible(false); resetForm() }}
                 >
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                  <Text style={[styles.cancelBtnText, { color: textSecondary }]}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
                   <Text style={styles.saveBtnText}>{editingItem ? 'Update' : 'Add'}</Text>
@@ -551,7 +561,7 @@ export default function Assignments() {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#FDF6FF' },
+  flex: { flex: 1 },
 
   blob: { position: 'absolute', borderRadius: 999, opacity: 0.35 },
   blobTop: { width: 220, height: 220, backgroundColor: '#F9C6D0', top: -60, right: -60 },
@@ -562,7 +572,7 @@ const styles = StyleSheet.create({
     paddingTop: 56, paddingBottom: 12,
   },
   appName: { fontFamily: 'Outfit_900Black', fontSize: 14, color: '#C084F5', letterSpacing: 2 },
-  pageTitle: { fontFamily: 'Outfit_700Bold', fontSize: 26, color: '#3D2C4E' },
+  pageTitle: { fontFamily: 'Outfit_700Bold', fontSize: 26 },
   addBtn: {
     width: 46, height: 46, borderRadius: 23,
     backgroundColor: '#C084F5', alignItems: 'center', justifyContent: 'center',
@@ -581,15 +591,14 @@ const styles = StyleSheet.create({
   aiBannerSubtitle: { fontFamily: 'Outfit_400Regular', fontSize: 12, color: 'rgba(255,255,255,0.9)', marginTop: 2 },
   searchBox: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.9)',
     marginHorizontal: 20, borderRadius: 16,
     paddingHorizontal: 14, paddingVertical: 10,
-    borderWidth: 1.5, borderColor: '#E8D5F5',
+    borderWidth: 1.5,
     marginBottom: 12,
   },
   searchInput: {
     flex: 1, fontFamily: 'Outfit_400Regular',
-    fontSize: 14, color: '#3D2C4E',
+    fontSize: 14,
   },
 
   filterContainer: { height: 42, marginBottom: 8 },
@@ -598,14 +607,14 @@ const styles = StyleSheet.create({
   filterTab: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 14, paddingVertical: 7,
-    borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.8)',
-    borderWidth: 1.5, borderColor: '#E8D5F5',
+    borderRadius: 20,
+    borderWidth: 1.5,
   },
   filterTabActive: { backgroundColor: '#C084F5', borderColor: '#C084F5' },
-  filterTabText: { fontFamily: 'Outfit_600SemiBold', fontSize: 13, color: '#9A85A4' },
+  filterTabText: { fontFamily: 'Outfit_600SemiBold', fontSize: 13 },
   filterTabTextActive: { color: '#fff' },
   filterCount: {
-    backgroundColor: '#F3E8FF', borderRadius: 10,
+    borderRadius: 10,
     paddingHorizontal: 6, paddingVertical: 1,
   },
   filterCountActive: { backgroundColor: 'rgba(255,255,255,0.3)' },
@@ -616,29 +625,28 @@ const styles = StyleSheet.create({
 
   emptyBox: { alignItems: 'center', paddingVertical: 60 },
   emptyEmoji: { fontSize: 48, marginBottom: 12 },
-  emptyText: { fontFamily: 'Outfit_700Bold', fontSize: 16, color: '#3D2C4E' },
-  emptySubtext: { fontFamily: 'Outfit_400Regular', fontSize: 13, color: '#9A85A4', marginTop: 6 },
+  emptyText: { fontFamily: 'Outfit_700Bold', fontSize: 16 },
+  emptySubtext: { fontFamily: 'Outfit_400Regular', fontSize: 13, marginTop: 6 },
 
   modalOverlay: {
     flex: 1, justifyContent: 'flex-end',
     backgroundColor: 'rgba(61,44,78,0.3)',
   },
   modalSheet: {
-    backgroundColor: '#FDF6FF',
     borderTopLeftRadius: 28, borderTopRightRadius: 28,
     padding: 24, maxHeight: '92%',
   },
   modalHandle: {
     width: 40, height: 4, borderRadius: 2,
-    backgroundColor: '#E8D5F5', alignSelf: 'center', marginBottom: 20,
+    alignSelf: 'center', marginBottom: 20,
   },
-  modalTitle: { fontFamily: 'Outfit_700Bold', fontSize: 20, color: '#3D2C4E', marginBottom: 20 },
+  modalTitle: { fontFamily: 'Outfit_700Bold', fontSize: 20, marginBottom: 20 },
 
-  fieldLabel: { fontFamily: 'Outfit_600SemiBold', fontSize: 13, color: '#7B5EA7', marginBottom: 8, marginLeft: 2 },
+  fieldLabel: { fontFamily: 'Outfit_600SemiBold', fontSize: 13, marginBottom: 8, marginLeft: 2 },
   input: {
     fontFamily: 'Outfit_400Regular',
-    backgroundColor: '#F9F0FF', borderWidth: 1.5, borderColor: '#E8D5F5',
-    borderRadius: 16, padding: 14, fontSize: 15, color: '#3D2C4E', marginBottom: 16,
+    borderWidth: 1.5,
+    borderRadius: 16, padding: 14, fontSize: 15, marginBottom: 16,
   },
   inputMulti: { height: 80, textAlignVertical: 'top' },
 
@@ -647,11 +655,11 @@ const styles = StyleSheet.create({
   chipRow: { flexDirection: 'row', gap: 8, marginBottom: 16, flexWrap: 'wrap' },
   chip: {
     paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: 20, borderWidth: 1.5, borderColor: '#E8D5F5',
-    backgroundColor: '#F9F0FF', marginRight: 4, marginBottom: 4,
+    borderRadius: 20, borderWidth: 1.5,
+    marginRight: 4, marginBottom: 4,
   },
   chipActive: { backgroundColor: '#C084F5', borderColor: '#C084F5' },
-  chipText: { fontFamily: 'Outfit_600SemiBold', fontSize: 13, color: '#9A85A4' },
+  chipText: { fontFamily: 'Outfit_600SemiBold', fontSize: 13 },
   chipTextActive: { color: '#fff' },
 
   hoursRow: {
@@ -659,48 +667,48 @@ const styles = StyleSheet.create({
   },
   hoursInput: {
     fontFamily: 'Outfit_400Regular',
-    backgroundColor: '#F9F0FF', borderWidth: 1.5, borderColor: '#E8D5F5',
+    borderWidth: 1.5,
     borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14,
-    fontSize: 15, color: '#3D2C4E', width: 90,
+    fontSize: 15, width: 90,
   },
-  hoursUnit: { fontFamily: 'Outfit_600SemiBold', fontSize: 14, color: '#9A85A4' },
+  hoursUnit: { fontFamily: 'Outfit_600SemiBold', fontSize: 14 },
   suggestBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 12, paddingVertical: 9,
-    borderRadius: 14, backgroundColor: '#F3E8FF',
-    borderWidth: 1.5, borderColor: '#E8D5F5',
+    borderRadius: 14,
+    borderWidth: 1.5,
   },
   suggestBtnText: { fontFamily: 'Outfit_600SemiBold', fontSize: 12, color: '#C084F5' },
-  hoursHint: { fontFamily: 'Outfit_400Regular', fontSize: 11, color: '#9A85A4', marginBottom: 16, marginLeft: 2 },
+  hoursHint: { fontFamily: 'Outfit_400Regular', fontSize: 11, marginBottom: 16, marginLeft: 2 },
 
   datePreview: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: '#F9F0FF', borderWidth: 1.5, borderColor: '#E8D5F5',
+    borderWidth: 1.5,
     borderRadius: 14, padding: 12, marginBottom: 10,
   },
-  datePreviewText: { fontFamily: 'Outfit_600SemiBold', fontSize: 13, color: '#3D2C4E' },
+  datePreviewText: { fontFamily: 'Outfit_600SemiBold', fontSize: 13 },
 
   dateRow: { flexDirection: 'row', gap: 8, marginBottom: 24 },
   dateCol: { flex: 1 },
   dateColLabel: {
     fontFamily: 'Outfit_600SemiBold', fontSize: 11,
-    color: '#9A85A4', textAlign: 'center', marginBottom: 6,
+    textAlign: 'center', marginBottom: 6,
   },
   datePicker: {
-    height: 130, backgroundColor: '#F9F0FF',
-    borderRadius: 16, borderWidth: 1.5, borderColor: '#E8D5F5',
+    height: 130,
+    borderRadius: 16, borderWidth: 1.5,
   },
   dateOption: { paddingVertical: 7, alignItems: 'center' },
   dateOptionActive: { backgroundColor: '#C084F5', borderRadius: 10, marginHorizontal: 4 },
-  dateOptionText: { fontFamily: 'Outfit_400Regular', fontSize: 13, color: '#9A85A4' },
+  dateOptionText: { fontFamily: 'Outfit_400Regular', fontSize: 13 },
   dateOptionTextActive: { color: '#fff', fontFamily: 'Outfit_700Bold' },
 
   modalBtns: { flexDirection: 'row', gap: 12, marginBottom: 12 },
   cancelBtn: {
     flex: 1, borderRadius: 18, padding: 15,
-    alignItems: 'center', backgroundColor: '#F3E8FF',
+    alignItems: 'center',
   },
-  cancelBtnText: { fontFamily: 'Outfit_700Bold', fontSize: 15, color: '#9A85A4' },
+  cancelBtnText: { fontFamily: 'Outfit_700Bold', fontSize: 15 },
   saveBtn: {
     flex: 1, borderRadius: 18, padding: 15,
     alignItems: 'center', backgroundColor: '#C084F5',

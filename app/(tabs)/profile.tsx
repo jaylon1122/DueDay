@@ -9,18 +9,62 @@ import {
   StyleSheet, Switch, Text, TextInput,
   TouchableOpacity, View
 } from 'react-native'
+import { translations } from '../../constants/translations'
+import { registerForPushNotificationsAsync } from '../../lib/notifications'
 import { getProfile, pickImage, uploadAvatar, upsertProfile } from '../../lib/profile'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
+import { Language, useLanguageStore } from '../../store/languageStore'
 import { useThemeStore } from '../../store/ThemeStore'
 
-const LANGUAGES = ['English', 'Filipino', 'Spanish', 'French', 'Japanese', 'Korean']
+const LANGUAGES: Language[] = ['English', 'Filipino', 'Spanish', 'French', 'Japanese', 'Korean']
+
+function ModalSheet({ visible, onClose, title, isDark, textPrimary, textSecondary, children }: any) {
+  return (
+    <Modal visible={!!visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalSheet, { backgroundColor: isDark ? '#1A1025' : '#FDF6FF' }]}>
+          <View style={styles.modalHandle} />
+          <View style={styles.modalHeader}>
+            <Text style={[styles.modalTitle, { color: textPrimary }]}>{title}</Text>
+            <TouchableOpacity onPress={onClose} style={styles.modalCloseBtn}>
+              <Ionicons name="close" size={20} color={textSecondary} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView showsVerticalScrollIndicator={false}>{children}</ScrollView>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
+function FieldInput({ label, value, onChangeText, placeholder, secureTextEntry, multiline, inputBg, inputBorder, textPrimary }: any) {
+  return (
+    <View style={styles.fieldGroup}>
+      <Text style={[styles.fieldLabel, { color: '#7B5EA7' }]}>{label}</Text>
+      <TextInput
+        style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textPrimary }]}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="#C4B5C8"
+        secureTextEntry={secureTextEntry}
+        multiline={multiline}
+        numberOfLines={multiline ? 3 : 1}
+      />
+    </View>
+  )
+}
 
 export default function Profile() {
   const session = useAuthStore((state) => state.session)
   const clearSession = useAuthStore((state) => state.clearSession)
   const theme = useThemeStore((state) => state.theme)
   const toggleTheme = useThemeStore((state) => state.toggleTheme)
+  const language = useLanguageStore((state) => state.language)
+  const setGlobalLanguage = useLanguageStore((state) => state.setLanguage)
+  const t = translations[language]
+
   const [dailyCapacity, setDailyCapacity] = useState(5)
   const [fontsLoaded] = useFonts({
     Outfit_400Regular,
@@ -29,18 +73,15 @@ export default function Profile() {
     Outfit_900Black,
   })
 
-  // Profile data states
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [fullName, setFullName] = useState('')
   const [username, setUsername] = useState('')
   const [bio, setBio] = useState('')
   const [phone, setPhone] = useState('')
-  const [language, setLanguage] = useState('English')
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  // Modal display states
   const [editProfileModal, setEditProfileModal] = useState(false)
   const [changePasswordModal, setChangePasswordModal] = useState(false)
   const [changeEmailModal, setChangeEmailModal] = useState(false)
@@ -50,7 +91,6 @@ export default function Profile() {
   const [aboutModal, setAboutModal] = useState(false)
   const [feedbackModal, setFeedbackModal] = useState(false)
 
-  // Sub-forms inside modals
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [newEmail, setNewEmail] = useState('')
@@ -84,7 +124,7 @@ export default function Profile() {
         setUsername(data.username ?? '')
         setBio(data.bio ?? '')
         setPhone(data.phone ?? '')
-        setLanguage(data.language ?? 'English')
+        if (data.language) setGlobalLanguage(data.language)
         setNotificationsEnabled(data.notifications_enabled ?? true)
         setDailyCapacity(data.daily_study_capacity ?? 5)
       }
@@ -166,8 +206,8 @@ export default function Profile() {
     }
   }
 
-  const handleSaveLanguage = async (lang: string) => {
-    setLanguage(lang)
+  const handleSaveLanguage = async (lang: Language) => {
+    setGlobalLanguage(lang)
     setLanguageModal(false)
     try {
       if (session?.user?.id) {
@@ -179,6 +219,13 @@ export default function Profile() {
   }
 
   const handleToggleNotifications = async (val: boolean) => {
+    if (val) {
+      const granted = await registerForPushNotificationsAsync()
+      if (!granted) {
+        Alert.alert('Permission needed', 'Please enable notifications in your device settings.')
+        return
+      }
+    }
     setNotificationsEnabled(val)
     try {
       if (session?.user?.id) {
@@ -188,6 +235,7 @@ export default function Profile() {
       console.error("Failed to save notifications toggle online:", err)
     }
   }
+
   const handleChangeCapacity = async (delta: number) => {
     const next = Math.min(12, Math.max(1, dailyCapacity + delta))
     setDailyCapacity(next)
@@ -199,6 +247,7 @@ export default function Profile() {
       console.error('Failed to save daily capacity:', err)
     }
   }
+
   const handleSendFeedback = async () => {
     if (!feedback.trim()) return Alert.alert('Error', 'Please enter your feedback')
     setFeedbackModal(false)
@@ -212,10 +261,7 @@ export default function Profile() {
       {
         text: 'Sign Out', style: 'destructive',
         onPress: () => {
-          // Fire and forget the server logout. If the network hangs, we don't care.
           supabase.auth.signOut().catch(() => {})
-
-          // Wait for the Alert modal to fully close before triggering router navigation
           setTimeout(() => {
             clearSession()
           }, 300)
@@ -231,39 +277,6 @@ export default function Profile() {
       </View>
     )
   }
-
-  const ModalSheet = ({ visible, onClose, title, children }: any) => (
-    <Modal visible={!!visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalSheet, { backgroundColor: isDark ? '#1A1025' : '#FDF6FF' }]}>
-          <View style={styles.modalHandle} />
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: textPrimary }]}>{title}</Text>
-            <TouchableOpacity onPress={onClose} style={styles.modalCloseBtn}>
-              <Ionicons name="close" size={20} color={textSecondary} />
-            </TouchableOpacity>
-          </View>
-          <ScrollView showsVerticalScrollIndicator={false}>{children}</ScrollView>
-        </View>
-      </View>
-    </Modal>
-  )
-
-  const FieldInput = ({ label, value, onChangeText, placeholder, secureTextEntry, multiline }: any) => (
-    <View style={styles.fieldGroup}>
-      <Text style={[styles.fieldLabel, { color: '#7B5EA7' }]}>{label}</Text>
-      <TextInput
-        style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: textPrimary }]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor="#C4B5C8"
-        secureTextEntry={secureTextEntry}
-        multiline={multiline}
-        numberOfLines={multiline ? 3 : 1}
-      />
-    </View>
-  )
 
   return (
     <ScrollView
@@ -296,25 +309,16 @@ export default function Profile() {
         {fullName ? <Text style={[styles.fullName, { color: textSecondary }]}>{fullName}</Text> : null}
         <Text style={[styles.emailText, { color: textSecondary }]}>{email}</Text>
         {bio ? <Text style={[styles.bio, { color: textSecondary }]}>{bio}</Text> : null}
-
-        <View style={styles.badgeRow}>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>🎓 Student</Text>
-          </View>
-          <View style={[styles.badge, { backgroundColor: '#DCFCE7' }]}>
-            <Text style={[styles.badgeText, { color: '#16A34A' }]}>✅ Active</Text>
-          </View>
-        </View>
       </View>
 
       {/* Stats */}
       <View style={[styles.card, { backgroundColor: cardBg }]}>
-        <Text style={[styles.sectionTitle, { color: textPrimary }]}>My Stats</Text>
+        <Text style={[styles.sectionTitle, { color: textPrimary }]}>{t.myStats}</Text>
         <View style={styles.statsRow}>
           {[
-            { label: 'Total', value: '0', bg: isDark ? 'rgba(192,132,245,0.15)' : '#F3E8FF' },
-            { label: 'Done', value: '0', bg: isDark ? 'rgba(134,239,172,0.15)' : '#DCFCE7' },
-            { label: 'Streak 🔥', value: '0', bg: isDark ? 'rgba(252,211,77,0.15)' : '#FEF3C7' },
+            { label: t.total, value: '0', bg: isDark ? 'rgba(192,132,245,0.15)' : '#F3E8FF' },
+            { label: t.done, value: '0', bg: isDark ? 'rgba(134,239,172,0.15)' : '#DCFCE7' },
+            { label: `${t.streak} 🔥`, value: '0', bg: isDark ? 'rgba(252,211,77,0.15)' : '#FEF3C7' },
           ].map(s => (
             <View key={s.label} style={[styles.statBox, { backgroundColor: s.bg }]}>
               <Text style={[styles.statValue, { color: textPrimary }]}>{s.value}</Text>
@@ -332,9 +336,9 @@ export default function Profile() {
               <Text style={styles.themeIconEmoji}>{isDark ? '🌙' : '☀️'}</Text>
             </View>
             <View>
-              <Text style={[styles.themeLabel, { color: textPrimary }]}>{isDark ? 'Dark Mode' : 'Light Mode'}</Text>
+              <Text style={[styles.themeLabel, { color: textPrimary }]}>{isDark ? t.darkMode : t.lightMode}</Text>
               <Text style={[styles.themeSubLabel, { color: textSecondary }]}>
-                {isDark ? 'Easy on the eyes at night' : 'Bright and clear'}
+                {isDark ? t.darkModeDesc : t.lightModeDesc}
               </Text>
             </View>
           </View>
@@ -349,19 +353,18 @@ export default function Profile() {
           </TouchableOpacity>
         </View>
       </View>
+
       {/* Study Capacity */}
       <View style={[styles.card, { backgroundColor: cardBg }]}>
-        <Text style={[styles.sectionTitle, { color: textPrimary }]}>Study Settings</Text>
+        <Text style={[styles.sectionTitle, { color: textPrimary }]}>{t.studySettings}</Text>
         <View style={styles.themeRow}>
           <View style={styles.themeLeft}>
             <View style={[styles.themeIconBox, { backgroundColor: isDark ? 'rgba(192,132,245,0.15)' : '#F3E8FF' }]}>
               <Ionicons name="time-outline" size={20} color="#C084F5" />
             </View>
             <View>
-              <Text style={[styles.themeLabel, { color: textPrimary }]}>Daily Study Capacity</Text>
-              <Text style={[styles.themeSubLabel, { color: textSecondary }]}>
-                Used by AI Plan to avoid overloading your day
-              </Text>
+              <Text style={[styles.themeLabel, { color: textPrimary }]}>{t.dailyCapacity}</Text>
+              <Text style={[styles.themeSubLabel, { color: textSecondary }]}>{t.dailyCapacityDesc}</Text>
             </View>
           </View>
         </View>
@@ -383,13 +386,14 @@ export default function Profile() {
           </TouchableOpacity>
         </View>
       </View>
+
       {/* Account Settings */}
       <View style={[styles.card, { backgroundColor: cardBg }]}>
-        <Text style={[styles.sectionTitle, { color: textPrimary }]}>Account</Text>
+        <Text style={[styles.sectionTitle, { color: textPrimary }]}>{t.account}</Text>
         {[
-          { icon: 'person-outline', color: '#C084F5', label: 'Edit Profile', onPress: () => setEditProfileModal(true) },
-          { icon: 'mail-outline', color: '#93C5FD', label: 'Change Email', onPress: () => setChangeEmailModal(true) },
-          { icon: 'lock-closed-outline', color: '#F9A8C9', label: 'Change Password', onPress: () => setChangePasswordModal(true) },
+          { icon: 'person-outline', color: '#C084F5', label: t.editProfile, onPress: () => setEditProfileModal(true) },
+          { icon: 'mail-outline', color: '#93C5FD', label: t.changeEmail, onPress: () => setChangeEmailModal(true) },
+          { icon: 'lock-closed-outline', color: '#F9A8C9', label: t.changePassword, onPress: () => setChangePasswordModal(true) },
         ].map((item, index, arr) => (
           <View key={item.label}>
             <TouchableOpacity style={styles.settingRow} onPress={item.onPress} activeOpacity={0.7}>
@@ -406,12 +410,12 @@ export default function Profile() {
 
       {/* Preferences */}
       <View style={[styles.card, { backgroundColor: cardBg }]}>
-        <Text style={[styles.sectionTitle, { color: textPrimary }]}>Preferences</Text>
+        <Text style={[styles.sectionTitle, { color: textPrimary }]}>{t.preferences}</Text>
         <View style={styles.settingRow}>
           <View style={[styles.settingIconBox, { backgroundColor: '#FCD34D22' }]}>
             <Ionicons name="notifications-outline" size={18} color="#FCD34D" />
           </View>
-          <Text style={[styles.settingLabel, { color: textPrimary }]}>Notifications</Text>
+          <Text style={[styles.settingLabel, { color: textPrimary }]}>{t.notifications}</Text>
           <Switch
             value={notificationsEnabled}
             onValueChange={handleToggleNotifications}
@@ -424,7 +428,7 @@ export default function Profile() {
           <View style={[styles.settingIconBox, { backgroundColor: '#93C5FD22' }]}>
             <Ionicons name="language-outline" size={18} color="#93C5FD" />
           </View>
-          <Text style={[styles.settingLabel, { color: textPrimary }]}>Language</Text>
+          <Text style={[styles.settingLabel, { color: textPrimary }]}>{t.language}</Text>
           <View style={styles.settingRight}>
             <Text style={[styles.settingValue, { color: textSecondary }]}>{language}</Text>
             <Ionicons name="chevron-forward" size={16} color={textSecondary} />
@@ -435,18 +439,18 @@ export default function Profile() {
           <View style={[styles.settingIconBox, { backgroundColor: '#86EFAC22' }]}>
             <Ionicons name="shield-outline" size={18} color="#86EFAC" />
           </View>
-          <Text style={[styles.settingLabel, { color: textPrimary }]}>Privacy</Text>
+          <Text style={[styles.settingLabel, { color: textPrimary }]}>{t.privacy}</Text>
           <Ionicons name="chevron-forward" size={16} color={textSecondary} />
         </TouchableOpacity>
       </View>
 
       {/* Support Settings */}
       <View style={[styles.card, { backgroundColor: cardBg }]}>
-        <Text style={[styles.sectionTitle, { color: textPrimary }]}>Support</Text>
+        <Text style={[styles.sectionTitle, { color: textPrimary }]}>{t.support}</Text>
         {[
-          { icon: 'help-circle-outline', color: '#C084F5', label: 'Help & FAQ', onPress: () => setHelpModal(true) },
-          { icon: 'chatbubble-outline', color: '#F9A8C9', label: 'Send Feedback', onPress: () => setFeedbackModal(true) },
-          { icon: 'information-circle-outline', color: '#86EFAC', label: 'About DueDay', onPress: () => setAboutModal(true) },
+          { icon: 'help-circle-outline', color: '#C084F5', label: t.helpFaq, onPress: () => setHelpModal(true) },
+          { icon: 'chatbubble-outline', color: '#F9A8C9', label: t.sendFeedback, onPress: () => setFeedbackModal(true) },
+          { icon: 'information-circle-outline', color: '#86EFAC', label: t.aboutApp, onPress: () => setAboutModal(true) },
         ].map((item, index, arr) => (
           <View key={item.label}>
             <TouchableOpacity style={styles.settingRow} onPress={item.onPress} activeOpacity={0.7}>
@@ -464,46 +468,56 @@ export default function Profile() {
       {/* Sign Out Button */}
       <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
         <Ionicons name="log-out-outline" size={20} color="#EF4444" />
-        <Text style={styles.logoutText}>Sign Out</Text>
+        <Text style={styles.logoutText}>{t.signOut}</Text>
       </TouchableOpacity>
 
       <Text style={[styles.version, { color: textSecondary }]}>DueDay v1.0.0</Text>
 
-      {/* --- ALL INLINE MODAL SHEETS --- */}
-
       {/* Edit Profile Modal */}
-      <ModalSheet visible={editProfileModal} onClose={() => setEditProfileModal(false)} title="✏️ Edit Profile">
-        <FieldInput label="Full Name" value={fullName} onChangeText={setFullName} placeholder="Your full name" />
-        <FieldInput label="Username" value={username} onChangeText={setUsername} placeholder="@username" />
-        <FieldInput label="Bio" value={bio} onChangeText={setBio} placeholder="Tell us about yourself..." multiline />
-        <FieldInput label="Phone" value={phone} onChangeText={setPhone} placeholder="+63 912 345 6789" />
+      <ModalSheet
+        visible={editProfileModal} onClose={() => setEditProfileModal(false)} title={`✏️ ${t.editProfile}`}
+        isDark={isDark} textPrimary={textPrimary} textSecondary={textSecondary}
+      >
+        <FieldInput label={t.fullName} value={fullName} onChangeText={setFullName} placeholder="Your full name" inputBg={inputBg} inputBorder={inputBorder} textPrimary={textPrimary} />
+        <FieldInput label={t.username} value={username} onChangeText={setUsername} placeholder="@username" inputBg={inputBg} inputBorder={inputBorder} textPrimary={textPrimary} />
+        <FieldInput label={t.bio} value={bio} onChangeText={setBio} placeholder="Tell us about yourself..." multiline inputBg={inputBg} inputBorder={inputBorder} textPrimary={textPrimary} />
+        <FieldInput label={t.phone} value={phone} onChangeText={setPhone} placeholder="+63 912 345 6789" inputBg={inputBg} inputBorder={inputBorder} textPrimary={textPrimary} />
         <TouchableOpacity style={styles.saveBtn} onPress={handleSaveProfile} disabled={saving}>
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save Changes</Text>}
+          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>{t.saveChanges}</Text>}
         </TouchableOpacity>
       </ModalSheet>
 
       {/* Change Password Modal */}
-      <ModalSheet visible={changePasswordModal} onClose={() => setChangePasswordModal(false)} title="🔒 Change Password">
-        <FieldInput label="New Password" value={newPassword} onChangeText={setNewPassword} placeholder="Min 6 characters" secureTextEntry />
-        <FieldInput label="Confirm Password" value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Repeat password" secureTextEntry />
+      <ModalSheet
+        visible={changePasswordModal} onClose={() => setChangePasswordModal(false)} title={`🔒 ${t.changePassword}`}
+        isDark={isDark} textPrimary={textPrimary} textSecondary={textSecondary}
+      >
+        <FieldInput label={t.newPassword} value={newPassword} onChangeText={setNewPassword} placeholder="Min 6 characters" secureTextEntry inputBg={inputBg} inputBorder={inputBorder} textPrimary={textPrimary} />
+        <FieldInput label={t.confirmPassword} value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Repeat password" secureTextEntry inputBg={inputBg} inputBorder={inputBorder} textPrimary={textPrimary} />
         <TouchableOpacity style={styles.saveBtn} onPress={handleChangePassword} disabled={saving}>
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Update Password</Text>}
+          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>{t.updatePassword}</Text>}
         </TouchableOpacity>
       </ModalSheet>
 
       {/* Change Email Modal */}
-      <ModalSheet visible={changeEmailModal} onClose={() => setChangeEmailModal(false)} title="📧 Change Email">
+      <ModalSheet
+        visible={changeEmailModal} onClose={() => setChangeEmailModal(false)} title={`📧 ${t.changeEmail}`}
+        isDark={isDark} textPrimary={textPrimary} textSecondary={textSecondary}
+      >
         <Text style={[styles.modalNote, { color: textSecondary }]}>
           A confirmation link will be sent to your new email address.
         </Text>
-        <FieldInput label="New Email" value={newEmail} onChangeText={setNewEmail} placeholder="newemail@example.com" />
+        <FieldInput label={t.newEmail} value={newEmail} onChangeText={setNewEmail} placeholder="newemail@example.com" inputBg={inputBg} inputBorder={inputBorder} textPrimary={textPrimary} />
         <TouchableOpacity style={styles.saveBtn} onPress={handleChangeEmail} disabled={saving}>
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Send Confirmation</Text>}
+          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>{t.sendConfirmation}</Text>}
         </TouchableOpacity>
       </ModalSheet>
 
       {/* Language Modal */}
-      <ModalSheet visible={languageModal} onClose={() => setLanguageModal(false)} title="🌐 Language">
+      <ModalSheet
+        visible={languageModal} onClose={() => setLanguageModal(false)} title={`🌐 ${t.language}`}
+        isDark={isDark} textPrimary={textPrimary} textSecondary={textSecondary}
+      >
         {LANGUAGES.map(lang => (
           <TouchableOpacity
             key={lang}
@@ -517,7 +531,10 @@ export default function Profile() {
       </ModalSheet>
 
       {/* Privacy Modal */}
-      <ModalSheet visible={privacyModal} onClose={() => setPrivacyModal(false)} title="🛡️ Privacy">
+      <ModalSheet
+        visible={privacyModal} onClose={() => setPrivacyModal(false)} title={`🛡️ ${t.privacy}`}
+        isDark={isDark} textPrimary={textPrimary} textSecondary={textSecondary}
+      >
         {[
           { title: 'Data Collection', desc: 'DueDay only collects data necessary to provide the service — your assignments and profile info.' },
           { title: 'Data Storage', desc: 'Your data is securely stored using Supabase with row-level security. Only you can access your data.' },
@@ -532,7 +549,10 @@ export default function Profile() {
       </ModalSheet>
 
       {/* Help Modal */}
-      <ModalSheet visible={helpModal} onClose={() => setHelpModal(false)} title="❓ Help & FAQ">
+      <ModalSheet
+        visible={helpModal} onClose={() => setHelpModal(false)} title={`❓ ${t.helpFaq}`}
+        isDark={isDark} textPrimary={textPrimary} textSecondary={textSecondary}
+      >
         {[
           { q: 'How do I add an assignment?', a: 'Go to the Assignments tab and tap the + button.' },
           { q: 'How do I mark an assignment as done?', a: 'Tap the status badge on any assignment card to cycle through statuses.' },
@@ -548,18 +568,24 @@ export default function Profile() {
       </ModalSheet>
 
       {/* Feedback Modal */}
-      <ModalSheet visible={feedbackModal} onClose={() => setFeedbackModal(false)} title="💬 Send Feedback">
+      <ModalSheet
+        visible={feedbackModal} onClose={() => setFeedbackModal(false)} title={`💬 ${t.sendFeedback}`}
+        isDark={isDark} textPrimary={textPrimary} textSecondary={textSecondary}
+      >
         <Text style={[styles.modalNote, { color: textSecondary }]}>
           We'd love to hear your thoughts on DueDay!
         </Text>
-        <FieldInput label="Your Feedback" value={feedback} onChangeText={setFeedback} placeholder="Tell us what you think..." multiline />
+        <FieldInput label={t.yourFeedback} value={feedback} onChangeText={setFeedback} placeholder="Tell us what you think..." multiline inputBg={inputBg} inputBorder={inputBorder} textPrimary={textPrimary} />
         <TouchableOpacity style={styles.saveBtn} onPress={handleSendFeedback}>
-          <Text style={styles.saveBtnText}>Submit Feedback</Text>
+          <Text style={styles.saveBtnText}>{t.submitFeedback}</Text>
         </TouchableOpacity>
       </ModalSheet>
 
       {/* About Modal */}
-      <ModalSheet visible={aboutModal} onClose={() => setAboutModal(false)} title="ℹ️ About DueDay">
+      <ModalSheet
+        visible={aboutModal} onClose={() => setAboutModal(false)} title={`ℹ️ ${t.aboutApp}`}
+        isDark={isDark} textPrimary={textPrimary} textSecondary={textSecondary}
+      >
         <View style={styles.aboutContent}>
           <Text style={styles.aboutAppName}>DueDay</Text>
           <Text style={[styles.aboutVersion, { color: textSecondary }]}>Version 1.0.0</Text>
@@ -608,9 +634,6 @@ const styles = StyleSheet.create({
   fullName: { fontFamily: 'Outfit_600SemiBold', fontSize: 15, marginTop: 2 },
   emailText: { fontFamily: 'Outfit_400Regular', fontSize: 13, marginTop: 4 },
   bio: { fontFamily: 'Outfit_400Regular', fontSize: 13, marginTop: 6, textAlign: 'center', paddingHorizontal: 20 },
-  badgeRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  badge: { backgroundColor: '#F3E8FF', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20 },
-  badgeText: { fontFamily: 'Outfit_600SemiBold', fontSize: 12, color: '#C084F5' },
 
   card: {
     borderRadius: 24, padding: 20, marginBottom: 14,
