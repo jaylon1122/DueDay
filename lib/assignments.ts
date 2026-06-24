@@ -9,7 +9,14 @@ export const getAssignments = async (userId: string) => {
 }
 
 export const addAssignment = async (data: any) => {
+<<<<<<< HEAD
   return await supabase.from('assignments').insert(data)
+=======
+  // .select().single() is required so the caller gets back the inserted
+  // row (with its generated id) — without it, `data` is null and anything
+  // relying on the new row's id (e.g. the AI banner) silently no-ops.
+  return await supabase.from('assignments').insert(data).select().single()
+>>>>>>> a61e00470d0e1d3205a7d4d88eb1439751fb6297
 }
 
 export const deleteAssignment = async (id: string) => {

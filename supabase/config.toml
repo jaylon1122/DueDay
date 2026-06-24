@@ -9,3 +9,17 @@ entrypoint = "./functions/ai-scheduler/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/ai-scheduler/*.html" ]
+<<<<<<< HEAD
+=======
+
+[functions.ai-plan-explain]
+enabled = true
+verify_jwt = true
+import_map = "./functions/ai-plan-explain/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/ai-plan-explain/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/ai-plan-explain/*.html" ]
+>>>>>>> a61e00470d0e1d3205a7d4d88eb1439751fb6297

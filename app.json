@@ -12,6 +12,23 @@
       "supportsTablet": true
     },
     "android": {
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "stickersmash",
+              "host": "auth",
+              "pathPrefix": "/callback"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -40,7 +57,18 @@
         }
       ],
       "expo-secure-store",
+<<<<<<< HEAD
       "expo-font"
+=======
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#C084F5"
+        }
+      ]
+>>>>>>> a61e00470d0e1d3205a7d4d88eb1439751fb6297
     ],
     "experiments": {
       "typedRoutes": true,

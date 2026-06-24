@@ -1,6 +1,10 @@
 import { Outfit_400Regular, Outfit_600SemiBold, Outfit_700Bold, Outfit_900Black, useFonts } from '@expo-google-fonts/outfit'
 import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
+<<<<<<< HEAD
+=======
+import * as Linking from 'expo-linking'
+>>>>>>> a61e00470d0e1d3205a7d4d88eb1439751fb6297
 import * as WebBrowser from 'expo-web-browser'
 import { useState } from 'react'
 import {
@@ -46,20 +50,38 @@ export default function LoginScreen() {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
+<<<<<<< HEAD
           redirectTo: 'stickersmash://auth/callback',
           skipBrowserRedirect: true,
+=======
+          redirectTo: Linking.createURL('callback'),
+          skipBrowserRedirect: true,
+          queryParams: {
+            prompt: 'select_account',
+          },
+>>>>>>> a61e00470d0e1d3205a7d4d88eb1439751fb6297
         },
       })
       if (error) { Alert.alert('Error', error.message); return }
       if (data.url) {
         const result = await WebBrowser.openAuthSessionAsync(
           data.url,
+<<<<<<< HEAD
           'stickersmash://auth/callback'
         )
         if (result.type === 'success' && result.url) {
           const url = new URL(result.url)
           const accessToken = url.searchParams.get('access_token')
           const refreshToken = url.searchParams.get('refresh_token')
+=======
+          Linking.createURL('callback')
+        )
+        if (result.type === 'success' && result.url) {
+          const url = new URL(result.url)
+          const params = new URLSearchParams(url.hash.replace('#', ''))
+          const accessToken = params.get('access_token')
+          const refreshToken = params.get('refresh_token')
+>>>>>>> a61e00470d0e1d3205a7d4d88eb1439751fb6297
           if (accessToken && refreshToken) {
             await supabase.auth.setSession({
               access_token: accessToken,
@@ -81,7 +103,11 @@ export default function LoginScreen() {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'facebook',
         options: {
+<<<<<<< HEAD
           redirectTo: 'stickersmash://auth/callback',
+=======
+          redirectTo: Linking.createURL('callback'),
+>>>>>>> a61e00470d0e1d3205a7d4d88eb1439751fb6297
           skipBrowserRedirect: true,
         },
       })
@@ -89,18 +115,43 @@ export default function LoginScreen() {
       if (data.url) {
         const result = await WebBrowser.openAuthSessionAsync(
           data.url,
+<<<<<<< HEAD
           'stickersmash://auth/callback'
         )
         if (result.type === 'success' && result.url) {
           const url = new URL(result.url)
           const accessToken = url.searchParams.get('access_token')
           const refreshToken = url.searchParams.get('refresh_token')
+=======
+          Linking.createURL('callback')
+        )
+        if (result.type === 'success' && result.url) {
+          const url = new URL(result.url)
+          const params = new URLSearchParams(url.hash.replace('#', ''))
+          const accessToken = params.get('access_token')
+          const refreshToken = params.get('refresh_token')
+          const errorMsg = params.get('error_description') || params.get('error')
+          
+          if (errorMsg) {
+            Alert.alert('Facebook Error', errorMsg)
+            return
+          }
+
+>>>>>>> a61e00470d0e1d3205a7d4d88eb1439751fb6297
           if (accessToken && refreshToken) {
             await supabase.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken,
             })
+<<<<<<< HEAD
           }
+=======
+          } else {
+            Alert.alert('Login Failed', 'No access token found in the response URL.')
+          }
+        } else if (result.type !== 'cancel') {
+          Alert.alert('Browser Result', JSON.stringify(result))
+>>>>>>> a61e00470d0e1d3205a7d4d88eb1439751fb6297
         }
       }
     } catch (err: any) {

@@ -1,6 +1,9 @@
 import * as ImagePicker from 'expo-image-picker'
 import { supabase } from './supabase'
+<<<<<<< HEAD
 
+=======
+>>>>>>> a61e00470d0e1d3205a7d4d88eb1439751fb6297
 export const getProfile = async (userId: string) => {
   return await supabase.from('profiles').select('*').eq('id', userId).single()
 }
